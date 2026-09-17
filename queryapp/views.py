@@ -18,8 +18,7 @@ import sqlite3
 
 DB_PATH = str(settings.DATABASES['default']['NAME'])
 ALLOWED_TABLES = {"employees", "departments", "salaries"}
-TABLE_REF = re.compile(r"\b(?:from|join|update)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
-
+TABLE_REF = re.compile(r"\b(?:from|join|update|into)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
 
 def uses_allowed_tables(sql: str) -> bool:
     referenced = TABLE_REF.findall(sql)
@@ -50,9 +49,9 @@ employees(id, name, department_id -> departments.id)
 salaries(id, employee_id -> employees.id, amount, effective_date)
 
 Rules:
-1. Output ONE SELECT statement OR ONE whitelisted UPDATE statement on the salaries table.
-2. Whitelisted writes: ONLY UPDATE queries modifying 'salaries' (e.g., salary amounts).
-3. Strictly FORBIDDEN: INSERT, DELETE, DROP, ALTER, TRUNCATE, CREATE, ATTACH, PRAGMA.
+1. Output ONE SELECT statement OR ONE whitelisted write statement (UPDATE, INSERT, DELETE) on the allowed tables.
+2. Whitelisted writes: UPDATE, INSERT, or DELETE queries modifying in-scope tables.
+3. Strictly FORBIDDEN: DROP, ALTER, TRUNCATE, CREATE, GRANT, ATTACH, PRAGMA, REPLACE.
 4. No semicolons, no comments.
 5. Reply with compact JSON: {"sql": "...", "query_type": "read" | "write", "explanation": "..."} — explanation under 12 words, no markdown."""
 
@@ -64,7 +63,7 @@ FORBIDDEN = re.compile(
 )
 
 WRITE_FORBIDDEN = re.compile(
-    r"\b(insert|delete|drop|alter|truncate|create|grant|attach|pragma|replace)\b",
+    r"\b(drop|alter|truncate|create|grant|attach|pragma|replace)\b",
     re.IGNORECASE,
 )
 
@@ -82,15 +81,17 @@ def is_safe_select(sql: str) -> bool:
 
 def is_safe_write(sql: str) -> bool:
     sql_stripped = sql.strip().rstrip(";").strip()
-    if not sql_stripped.lower().startswith("update"):
+    
+    # Allow UPDATE, INSERT, and DELETE statements
+    if not sql_stripped.lower().startswith(("update", "insert", "delete")):
         return False
+        
     if ";" in sql_stripped or "--" in sql_stripped or "/*" in sql_stripped or "*/" in sql_stripped:
         return False
+        
     if WRITE_FORBIDDEN.search(sql_stripped):
         return False
-    # Strictly enforce that only the 'salaries' table can be updated
-    if not re.search(r"\bupdate\s+salaries\b", sql_stripped, re.IGNORECASE):
-        return False
+        
     return True
 
 
