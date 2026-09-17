@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import connection
+from django.db.models import F
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_protect
@@ -13,8 +14,10 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from google import genai
 from google.genai import types
 
-from .models import QueryLog
+from .models import QueryLog, APIUsage
 import sqlite3
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 DB_PATH = str(settings.DATABASES['default']['NAME'])
 ALLOWED_TABLES = {"employees", "departments", "salaries"}
@@ -70,6 +73,21 @@ def is_safe_select(sql: str) -> bool:
         return False
     return True
 
+PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def record_gemini_usage():
+    today = datetime.now(PACIFIC_TZ).date()
+
+    usage, created = APIUsage.objects.get_or_create(
+        date=today,
+        defaults={"count": 0},
+    )
+
+    APIUsage.objects.filter(pk=usage.pk).update(
+        count=F("count") + 1
+    )
+
 def ask_gemini(prompt: str) -> dict:
     response = get_client().models.generate_content(
         model=GEMINI_MODEL,
@@ -82,6 +100,9 @@ def ask_gemini(prompt: str) -> dict:
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
+
+    record_gemini_usage()
+
     return json.loads(response.text)
 
 
@@ -183,3 +204,14 @@ def run_query(request):
     )
 
     return JsonResponse({"columns": columns, "rows": rows, "row_count": len(rows)})
+
+def api_usage(request):
+    today = datetime.now(PACIFIC_TZ).date()
+
+    usage = APIUsage.objects.filter(date=today).first()
+
+    count = usage.count if usage else 0
+
+    return JsonResponse({
+        "count": count,
+    })

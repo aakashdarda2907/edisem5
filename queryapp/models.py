@@ -50,7 +50,7 @@ class QueryLog(models.Model):
     raw_transcript = models.TextField()
     generated_sql = models.TextField()
     was_confirmed = models.BooleanField(default=False)
-    correction_text = models.TextField(blank=True, null=True)  # filled only if user said "no"
+    correction_text = models.TextField(blank=True, null=True)
     row_count = models.IntegerField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -59,3 +59,11 @@ class QueryLog(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class APIUsage(models.Model):
+    date = models.DateField(unique=True)
+    count = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.date}: {self.count} Gemini calls"
