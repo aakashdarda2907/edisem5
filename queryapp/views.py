@@ -18,7 +18,7 @@ import sqlite3
 
 DB_PATH = str(settings.DATABASES['default']['NAME'])
 ALLOWED_TABLES = {"employees", "departments", "salaries"}
-TABLE_REF = re.compile(r"\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
+TABLE_REF = re.compile(r"\b(?:from|join|update)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
 
 
 def uses_allowed_tables(sql: str) -> bool:
@@ -49,8 +49,12 @@ departments(id, name)
 employees(id, name, department_id -> departments.id)
 salaries(id, employee_id -> employees.id, amount, effective_date)
 
-Rules: Output ONE SELECT statement only. No INSERT/UPDATE/DELETE/DROP/ALTER/PRAGMA/ATTACH. No semicolons, no comments. Use only the tables/columns above. Always alias every selected column with a short snake_case name (e.g. department_name, avg_salary) so results have readable headers.
-Reply with compact JSON only: {"sql": "...", "explanation": "..."} — explanation under 12 words, no markdown."""
+Rules:
+1. Output ONE SELECT statement OR ONE whitelisted UPDATE statement on the salaries table.
+2. Whitelisted writes: ONLY UPDATE queries modifying 'salaries' (e.g., salary amounts).
+3. Strictly FORBIDDEN: INSERT, DELETE, DROP, ALTER, TRUNCATE, CREATE, ATTACH, PRAGMA.
+4. No semicolons, no comments.
+5. Reply with compact JSON: {"sql": "...", "query_type": "read" | "write", "explanation": "..."} — explanation under 12 words, no markdown."""
 
 
 # --- Safety check applied to every piece of SQL before it is run ---
@@ -58,6 +62,12 @@ FORBIDDEN = re.compile(
     r"\b(insert|update|delete|drop|alter|truncate|create|grant|attach|pragma|replace)\b",
     re.IGNORECASE,
 )
+
+WRITE_FORBIDDEN = re.compile(
+    r"\b(insert|delete|drop|alter|truncate|create|grant|attach|pragma|replace)\b",
+    re.IGNORECASE,
+)
+
 def is_safe_select(sql: str) -> bool:
     sql_stripped = sql.strip().rstrip(";").strip()
     if not sql_stripped.lower().startswith("select"):
@@ -69,6 +79,21 @@ def is_safe_select(sql: str) -> bool:
     if FORBIDDEN.search(sql_stripped):
         return False
     return True
+
+def is_safe_write(sql: str) -> bool:
+    sql_stripped = sql.strip().rstrip(";").strip()
+    if not sql_stripped.lower().startswith("update"):
+        return False
+    if ";" in sql_stripped or "--" in sql_stripped or "/*" in sql_stripped or "*/" in sql_stripped:
+        return False
+    if WRITE_FORBIDDEN.search(sql_stripped):
+        return False
+    # Strictly enforce that only the 'salaries' table can be updated
+    if not re.search(r"\bupdate\s+salaries\b", sql_stripped, re.IGNORECASE):
+        return False
+    return True
+
+
 
 def ask_gemini(prompt: str) -> dict:
     response = get_client().models.generate_content(
@@ -104,14 +129,17 @@ def generate_query(request):
     try:
         result = ask_gemini(f"The user asked, by voice: \"{transcript}\"")
     except Exception as e:
-        return JsonResponse({"error": f"Could not generate a query: {e}"}, status=502)
+        return JsonResponse({"error": f"Could not generate query: {e}"}, status=502)
 
     sql = result.get("sql", "")
-    if not is_safe_select(sql):
-        return JsonResponse({"error": "Generated query failed the safety check."}, status=400)
+    query_type = result.get("query_type", "read")
+
+    if not (is_safe_select(sql) or is_safe_write(sql)):
+        return JsonResponse({"error": "Generated query failed write/select safety check."}, status=400)
 
     return JsonResponse({
         "sql": sql,
+        "query_type": query_type,
         "explanation": result.get("explanation", ""),
     })
 
@@ -129,7 +157,7 @@ def revise_query(request):
     prompt = (
         f"You previously wrote this SQL:\n{previous_sql}\n\n"
         f"The user said that was NOT what they meant. Their correction: \"{correction}\"\n"
-        f"Write a new SELECT statement that fixes this."
+        f"Write a new SELECT or whitelisted UPDATE statement fixing this."
     )
 
     try:
@@ -138,13 +166,17 @@ def revise_query(request):
         return JsonResponse({"error": f"Could not revise the query: {e}"}, status=502)
 
     sql = result.get("sql", "")
-    if not is_safe_select(sql):
-        return JsonResponse({"error": "Revised query failed the safety check."}, status=400)
+    query_type = result.get("query_type", "read")
+
+    if not (is_safe_select(sql) or is_safe_write(sql)):
+        return JsonResponse({"error": "Revised query failed write/select safety check."}, status=400)
 
     return JsonResponse({
         "sql": sql,
+        "query_type": query_type,
         "explanation": result.get("explanation", ""),
     })
+
 
 @require_POST
 @csrf_protect
@@ -154,32 +186,44 @@ def run_query(request):
     transcript = body.get("transcript", "")
     correction = body.get("correction", "")
 
-    if not is_safe_select(sql):
-        return JsonResponse({"error": "Query failed the safety check and was not run."}, status=400)
+    is_select = is_safe_select(sql)
+    is_write = is_safe_write(sql)
+
+    if not (is_select or is_write):
+        return JsonResponse({"error": "Query failed safety check and was blocked."}, status=400)
     if not uses_allowed_tables(sql):
-        return JsonResponse({"error": "Query references a table outside the allowed schema."}, status=400)
+        return JsonResponse({"error": "Query references an unauthorized table."}, status=400)
 
     try:
-        conn = get_readonly_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        columns = [col[0] for col in cursor.description]
-        rows = cursor.fetchmany(200)
-        conn.close()
+        if is_select:
+            conn = get_readonly_connection()
+            cursor = conn.cursor()
+            cursor.execute(sql)
+            columns = [col[0] for col in cursor.description] if cursor.description else []
+            rows = cursor.fetchmany(200)
+            conn.close()
+            rows = [[float(v) if isinstance(v, Decimal) else v for v in r] for r in rows]
+            row_count = len(rows)
+        else:
+            # Execute write on standard writable SQLite connection
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute(sql)
+            conn.commit()
+            row_count = cursor.rowcount
+            conn.close()
+            columns = ["status", "rows_updated"]
+            rows = [["Success", row_count]]
+
     except Exception as e:
-        return JsonResponse({"error": f"Query failed to run: {e}"}, status=400)
-
-    def clean(v):
-        return float(v) if isinstance(v, Decimal) else v
-
-    rows = [[clean(v) for v in row] for row in rows]
+        return JsonResponse({"error": f"Execution failed: {e}"}, status=400)
 
     QueryLog.objects.create(
         raw_transcript=transcript,
         generated_sql=sql,
         was_confirmed=True,
         correction_text=correction or None,
-        row_count=len(rows),
+        row_count=row_count,
     )
 
-    return JsonResponse({"columns": columns, "rows": rows, "row_count": len(rows)})
+    return JsonResponse({"columns": columns, "rows": rows, "row_count": row_count, "query_type": "write" if is_write else "read"})

@@ -49,8 +49,6 @@ const steps = [...document.querySelectorAll('.step')];
 const emptyResults = document.getElementById('emptyResults');
 const resultsArea = document.getElementById('resultsArea');
 
-
-
 let currentTranscript = '';
 let currentSQL = '';
 
@@ -88,26 +86,51 @@ function showError(message) {
   setStatus('error');
 }
 
+// --- Single handleTranscript Handler with Write Warning Styling ---
+let requestInFlight = false;
 async function handleTranscript(transcript) {
+  if (requestInFlight) return;
+  requestInFlight = true;
+  document.querySelectorAll('.chip').forEach(c => c.disabled = true);
+
   resetForNewQuery();
   currentTranscript = transcript;
   transcriptText.innerHTML = transcript;
   blockTranscript.classList.add('show');
   setStatus('understood');
+  micHint.textContent = 'Thinking…';
 
   try {
     const result = await postJSON('/generate-query/', { transcript });
     currentSQL = result.sql;
     queryText.textContent = result.sql;
     explainText.textContent = result.explanation || '';
+
+    // Stricter Visual Warning for Write Operations
+    if (result.query_type === 'write') {
+      blockQuery.style.border = '2px solid #ef4444';
+      blockQuery.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
+      document.querySelector('#confirmRow .confirm-q').textContent = '⚠️ WARNING: This will update data. Confirm?';
+      document.querySelector('#confirmRow .confirm-q').style.color = '#ef4444';
+    } else {
+      blockQuery.style.border = '';
+      blockQuery.style.backgroundColor = '';
+      document.querySelector('#confirmRow .confirm-q').textContent = 'Is this what you meant?';
+      document.querySelector('#confirmRow .confirm-q').style.color = '';
+    }
+
     blockQuery.classList.add('show');
     setStatus('waiting');
   } catch (err) {
     showError(err.message);
+  } finally {
+    requestInFlight = false;
+    micHint.textContent = 'Tap the mic and ask something about the tables on the right.';
+    document.querySelectorAll('.chip').forEach(c => c.disabled = false);
   }
 }
 
-// --- Voice capture (Web Speech API), with typed fallback ---
+// --- Voice capture (Web Speech API) ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (!SpeechRecognition) {
@@ -145,7 +168,7 @@ fallbackSend.addEventListener('click', () => {
   if (fallbackInput.value.trim()) handleTranscript(fallbackInput.value.trim());
 });
 
-// --- Confirm / deny / revise ---
+// --- Confirm / Deny / Revise ---
 btnNo.addEventListener('click', () => {
   confirmRow.style.display = 'none';
   reviseRow.style.display = 'flex';
@@ -160,6 +183,15 @@ btnRevise.addEventListener('click', async () => {
     const result = await postJSON('/revise-query/', { previous_sql: currentSQL, correction });
     currentSQL = result.sql;
     revisedQueryText.textContent = result.sql;
+
+    if (result.query_type === 'write') {
+      blockRevised.style.border = '2px solid #ef4444';
+      blockRevised.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
+    } else {
+      blockRevised.style.border = '';
+      blockRevised.style.backgroundColor = '';
+    }
+
     reviseRow.style.display = 'none';
     blockRevised.classList.add('show');
   } catch (err) {
@@ -196,6 +228,7 @@ async function runQuery(correction) {
     showError(err.message);
   }
 }
+
 function showResults(columns, rows) {
   emptyResults.style.display = 'none';
   const table = document.createElement('table');
@@ -209,35 +242,6 @@ function showResults(columns, rows) {
   meta.innerHTML = `<span>${rows.length} rows</span>`;
   resultsArea.appendChild(meta);
 }
-let requestInFlight = false;
-async function handleTranscript(transcript) {
-  if (requestInFlight) return;
-  requestInFlight = true;
-  document.querySelectorAll('.chip').forEach(c => c.disabled = true);
-
-  resetForNewQuery();
-  currentTranscript = transcript;
-  transcriptText.innerHTML = transcript;
-  blockTranscript.classList.add('show');
-  setStatus('understood');
-  micHint.textContent = 'Thinking…';
-
-  try {
-    const result = await postJSON('/generate-query/', { transcript });
-    currentSQL = result.sql;
-    queryText.textContent = result.sql;
-    explainText.textContent = result.explanation || '';
-    blockQuery.classList.add('show');
-    setStatus('waiting');
-  } catch (err) {
-    showError(err.message);
-  } finally {
-    requestInFlight = false;
-    micHint.textContent = 'Tap the mic and ask something about the tables on the right.';
-    document.querySelectorAll('.chip').forEach(c => c.disabled = false);
-  }
-}
-
 
 document.getElementById('copyBtn').addEventListener('click', () => {
   navigator.clipboard.writeText(currentSQL);
