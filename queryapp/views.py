@@ -101,6 +101,18 @@ def generate_query(request):
     if not transcript:
         return JsonResponse({"error": "No transcript received."}, status=400)
 
+    cached = (
+        QueryLog.objects
+        .filter(normalized_transcript=QueryLog.normalize(transcript), was_confirmed=True)
+        .order_by('-created_at')
+        .first()
+    )
+    if cached:
+        return JsonResponse({
+            "sql": cached.generated_sql,
+            "explanation": "Reused from a previously confirmed query.",
+        })
+
     try:
         result = ask_gemini(f"The user asked, by voice: \"{transcript}\"")
     except Exception as e:

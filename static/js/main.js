@@ -53,6 +53,9 @@ const resultsArea = document.getElementById('resultsArea');
 
 let currentTranscript = '';
 let currentSQL = '';
+let currentColumns = [];
+let currentRows = [];
+const downloadCsvBtn = document.getElementById('downloadCsvBtn');
 
 function formatHeader(col) {
   return col.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -80,7 +83,10 @@ function resetForNewQuery() {
   emptyResults.style.display = 'block';
   resultsArea.querySelectorAll('table, .results-meta').forEach(el => el.remove());
   btnYes.disabled = false; btnNo.disabled = false;
+  downloadCsvBtn.style.display = 'none';
+  currentColumns = []; currentRows = [];
 }
+
 
 function showError(message) {
   errorText.textContent = message;
@@ -197,6 +203,8 @@ async function runQuery(correction) {
   }
 }
 function showResults(columns, rows) {
+  currentColumns = columns;
+  currentRows = rows;
   emptyResults.style.display = 'none';
   const table = document.createElement('table');
   table.className = 'results';
@@ -208,7 +216,34 @@ function showResults(columns, rows) {
   meta.className = 'results-meta';
   meta.innerHTML = `<span>${rows.length} rows</span>`;
   resultsArea.appendChild(meta);
+  downloadCsvBtn.style.display = rows.length ? 'inline-block' : 'none';
 }
+
+function csvEscape(value) {
+  const str = value === null || value === undefined ? '' : String(value);
+  if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  return str;
+}
+
+function buildCSV(columns, rows) {
+  const lines = [columns.map(csvEscape).join(',')];
+  rows.forEach(r => lines.push(r.map(csvEscape).join(',')));
+  return lines.join('\r\n');
+}
+
+downloadCsvBtn.addEventListener('click', () => {
+  if (!currentRows.length) return;
+  const csv = buildCSV(currentColumns, currentRows);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `voxquery-results-${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
 let requestInFlight = false;
 async function handleTranscript(transcript) {
   if (requestInFlight) return;
