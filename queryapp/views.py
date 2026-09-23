@@ -53,7 +53,8 @@ Rules:
 2. Whitelisted writes: UPDATE, INSERT, or DELETE queries modifying in-scope tables.
 3. Strictly FORBIDDEN: DROP, ALTER, TRUNCATE, CREATE, GRANT, ATTACH, PRAGMA, REPLACE.
 4. No semicolons, no comments.
-5. Reply with compact JSON: {"sql": "...", "query_type": "read" | "write", "explanation": "..."} — explanation under 12 words, no markdown."""
+5. CRITICAL: Reply ONLY with raw JSON. Do not include conversational text or markdown.
+Format exactly like this: {"sql": "...", "query_type": "read" | "write", "explanation": "..."}"""
 
 
 # --- Safety check applied to every piece of SQL before it is run ---
