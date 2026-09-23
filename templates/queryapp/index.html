@@ -549,10 +549,86 @@
       </div>
 
 
+      <!-- ================= TASK 2 ================= -->
+
+      <!-- ================= QUERY PERFORMANCE ================= -->
+
+<div
+  class="panel performance-panel"
+  id="performancePanel"
+>
+
+  <p class="panel-title">
+    <span class="n">05</span>
+    Query Performance
+  </p>
+
+
+  <!-- Performance summary -->
+  <div class="performance-summary">
+
+    <!-- Latest response time -->
+    <div class="performance-stat">
+
+      <span class="stat-label">
+        Latest response
+      </span>
+
+      <strong id="latestResponseTime">
+        —
+      </strong>
+
+    </div>
+
+
+    <!-- Queries this session -->
+    <div class="performance-stat">
+
+      <span class="stat-label">
+        Queries this session
+      </span>
+
+      <strong id="queryCount">
+        0
+      </strong>
+
+    </div>
+
+
+    <!-- Average response time -->
+    <div class="performance-stat">
+
+      <span class="stat-label">
+        Average response
+      </span>
+
+      <strong id="averageResponseTime">
+        —
+      </strong>
+
+    </div>
+
+  </div>
+
+
+  <!-- Response time chart -->
+  <div class="chart-wrapper">
+
+    <div class="chart-title">
+      Response time per query
+    </div>
+
+    <canvas
+      id="responseTimeChart"
+      width="600"
+      height="220"
+    ></canvas>
+
+    <div id="chartEmpty">
+      Run a query to see response-time data.
     </div>
 
   </div>
 
 </div>
-
 {% endblock %}

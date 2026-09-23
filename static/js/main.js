@@ -4,6 +4,11 @@
 // ============================================================
 
 
+// ================= TASK 2: RESPONSE TIME HISTORY =================
+
+let responseTimeHistory = [];
+
+
 // ============================================================
 // CSRF
 // ============================================================
@@ -17,7 +22,6 @@ function getCookie(name) {
 }
 
 const csrftoken = getCookie('csrftoken');
-
 
 // ============================================================
 // POST HELPER
@@ -45,7 +49,85 @@ async function postJSON(url, data) {
   return body;
 }
 
+// ================= TASK 2: RESPONSE TIME CHART =================
+//
+// NOTE: index.html already defines the real Task 2 elements:
+//   #latestResponseTime, #queryCount, #averageResponseTime,
+//   the <canvas id="responseTimeChart">, and #chartEmpty.
+// This function must write into THOSE elements, not create a
+// new node — a second element with id="responseTimeChart" would
+// collide with the existing canvas and never actually appear
+// inside the Query Performance panel.
 
+function updatePerformanceStats() {
+  const latestEl = document.getElementById("latestResponseTime");
+  const countEl = document.getElementById("queryCount");
+  const avgEl = document.getElementById("averageResponseTime");
+
+  if (!latestEl || !countEl || !avgEl) return;
+
+  const count = responseTimeHistory.length;
+  const latest = responseTimeHistory[count - 1];
+
+  latestEl.textContent = count ? `${latest.toFixed(2)} ms` : '—';
+  countEl.textContent = count;
+  const total = responseTimeHistory.reduce((sum, t) => sum + t, 0);
+  avgEl.textContent = count ? `${(total / count).toFixed(2)} ms` : '—';
+}
+
+function renderResponseTimeChart() {
+  const canvas = document.getElementById("responseTimeChart");
+  const emptyState = document.getElementById("chartEmpty");
+
+  if (!canvas) return;
+
+  // Keep the stat boxes in sync every time this runs.
+  updatePerformanceStats();
+
+  if (responseTimeHistory.length === 0) {
+    if (emptyState) emptyState.style.display = 'flex';
+    return;
+  }
+
+  if (emptyState) emptyState.style.display = 'none';
+
+  const ctx = canvas.getContext('2d');
+
+  // Use the canvas's actual pixel size (it's styled 100% width via CSS).
+  const width = canvas.clientWidth || canvas.width;
+  const height = canvas.clientHeight || canvas.height;
+  canvas.width = width;
+  canvas.height = height;
+
+  ctx.clearRect(0, 0, width, height);
+
+  const padding = 24;
+  const plotW = width - padding * 2;
+  const plotH = height - padding * 2;
+
+  const maxTime = Math.max(...responseTimeHistory, 1);
+  const barCount = responseTimeHistory.length;
+  const gap = 10;
+  const barWidth = (plotW - gap * (barCount - 1)) / barCount;
+
+  ctx.font = '11px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+
+  responseTimeHistory.forEach((time, index) => {
+    const barHeight = Math.max((time / maxTime) * plotH, 4);
+    const x = padding + index * (barWidth + gap);
+    const y = padding + (plotH - barHeight);
+
+    ctx.fillStyle = '#4fa98c';
+    ctx.fillRect(x, y, barWidth, barHeight);
+
+    ctx.fillStyle = '#8d95a3';
+    ctx.fillText(`${Math.round(time)}`, x + barWidth / 2, y - 6);
+
+    ctx.fillStyle = '#5c6270';
+    ctx.fillText(`Q${index + 1}`, x + barWidth / 2, height - padding + 14);
+  });
+}
 // ============================================================
 // API USAGE METER
 // ============================================================
@@ -841,7 +923,8 @@ async function runQuery(correction) {
 
         showResults(
           result.columns,
-          result.rows
+          result.rows,
+          result.response_time_ms
         );
 
 
@@ -874,90 +957,64 @@ async function runQuery(correction) {
 // SHOW RESULTS
 // ============================================================
 
-function showResults(columns, rows) {
+function showResults(columns, rows, responseTimeMs = null) {
+  emptyResults.style.display = 'none';
+    // ================= TASK 2 =================
+  // Store response time for this query
+  if (responseTimeMs !== null && responseTimeMs !== undefined) {
+    const time = Number(responseTimeMs);
 
-  emptyResults.style.display =
-    'none';
+    if (!Number.isNaN(time)) {
+      responseTimeHistory.push(time);
 
+      // Keep only the latest 10 queries
+      if (responseTimeHistory.length > 10) {
+        responseTimeHistory.shift();
+      }
 
-  const table =
-    document.createElement(
-      'table'
-    );
+      renderResponseTimeChart();
+    }
+  }
+  // ===========================================
 
-
-  table.className =
-    'results';
-
+  const table = document.createElement('table');
+  table.className = 'results';
 
   table.innerHTML = `
-
     <thead>
-
       <tr>
-
-        ${columns
-          .map(
-            c =>
-              `<th>${formatHeader(c)}</th>`
-          )
-          .join('')}
-
+        ${columns.map(c => `<th>${formatHeader(c)}</th>`).join('')}
       </tr>
-
     </thead>
 
-
     <tbody>
-
-      ${rows
-        .map(
-          row => `
-
-            <tr>
-
-              ${row
-                .map(
-                  value =>
-                    `<td>${formatValue(value)}</td>`
-                )
-                .join('')}
-
-            </tr>
-
-          `
-        )
-        .join('')}
-
+      ${rows.map(r => `
+        <tr>
+          ${r.map(v => `<td>${formatValue(v)}</td>`).join('')}
+        </tr>
+      `).join('')}
     </tbody>
-
   `;
 
+  resultsArea.appendChild(table);
 
-  resultsArea.appendChild(
-    table
-  );
+  const meta = document.createElement('div');
+  meta.className = 'results-meta';
 
+let responseTimeText = '';
 
-  const meta =
-    document.createElement(
-      'div'
-    );
-
-
-  meta.className =
-    'results-meta';
-
-
-  meta.innerHTML =
-    `<span>${rows.length} rows</span>`;
-
-
-  resultsArea.appendChild(
-    meta
-  );
+if (responseTimeMs !== null && responseTimeMs !== undefined) {
+  responseTimeText = `
+    <span>Response time: ${Number(responseTimeMs).toFixed(2)} ms</span>
+  `;
 }
 
+meta.innerHTML = `
+  <span>${rows.length} rows</span>
+  ${responseTimeText}
+`;
+  resultsArea.appendChild(meta);
+}
 
 // ============================================================
 // COPY SQL

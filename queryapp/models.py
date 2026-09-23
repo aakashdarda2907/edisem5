@@ -44,14 +44,19 @@ class Salary(models.Model):
 
 class QueryLog(models.Model):
     """
-    One row per voice query attempt. Lets us show 'how the query ran'
-    in the UI and gives us data for the evaluation section later.
+    One row per voice query attempt.
+    Stores query information and execution time so we can
+    display response-time statistics in the UI.
     """
     raw_transcript = models.TextField()
     generated_sql = models.TextField()
     was_confirmed = models.BooleanField(default=False)
     correction_text = models.TextField(blank=True, null=True)
     row_count = models.IntegerField(blank=True, null=True)
+
+    # Task 2: database query execution time in milliseconds
+    response_time_ms = models.FloatField(blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
