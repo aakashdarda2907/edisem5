@@ -1,122 +1,634 @@
 {% extends "base.html" %}
 {% load static %}
+
 {% block content %}
+
 <div class="wrap">
 
+  <!-- ================= HEADER ================= -->
+
   <header>
+
     <div class="brand">
+
       <div class="brand-mark">VQ</div>
+
       <div>
         <h1>VoxQuery</h1>
         <p>voice → query · live Gemini-backed prototype</p>
       </div>
+
     </div>
-    <div class="status-pill" id="statusPill">
-      <span class="status-dot"></span>
-      <span id="statusText">idle</span>
+
+
+    <!-- Header right side -->
+
+    <div class="header-right">
+
+      <!-- API Usage Meter -->
+
+      <div class="usage-meter" title="Gemini API usage today">
+
+        <svg
+          class="usage-ring"
+          width="70"
+          height="70"
+          viewBox="0 0 70 70"
+          aria-label="Gemini API usage"
+        >
+
+          <!-- Background circle -->
+
+          <circle
+            class="usage-bg"
+            cx="35"
+            cy="35"
+            r="28"
+          ></circle>
+
+
+          <!-- Progress circle -->
+
+          <circle
+            class="usage-progress"
+            id="usageProgress"
+            cx="35"
+            cy="35"
+            r="28"
+          ></circle>
+
+        </svg>
+
+
+        <!-- Number displayed in the middle -->
+
+        <div class="usage-text">
+
+          <span id="usageCount">0</span>
+
+          <small>USED</small>
+
+        </div>
+
+      </div>
+
+
+      <!-- Existing status -->
+
+      <div class="status-pill" id="statusPill">
+
+        <span class="status-dot"></span>
+
+        <span id="statusText">idle</span>
+
+      </div>
+
     </div>
+
   </header>
+
+
+  <!-- ================= MAIN GRID ================= -->
 
   <div class="grid">
 
+
+    <!-- ================= LEFT COLUMN ================= -->
+
     <div>
+
+      <!-- Speak your request -->
+
       <div class="panel">
-        <p class="panel-title"><span class="n">01</span> Speak your request</p>
+
+        <p class="panel-title">
+          <span class="n">01</span>
+          Speak your request
+        </p>
+
 
         <div class="mic-zone">
-          <button class="mic-btn" id="micBtn" aria-label="Tap to speak">
-            <svg viewBox="0 0 24 24"><path class="mic-fill" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+
+          <button
+            class="mic-btn"
+            id="micBtn"
+            aria-label="Tap to speak"
+          >
+
+            <svg viewBox="0 0 24 24">
+
+              <path
+                class="mic-fill"
+                d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
+              />
+
+            </svg>
+
           </button>
+
+
           <div class="wave" id="wave">
-            <span></span><span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span><span></span>
+
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+
           </div>
+
         </div>
-        <p class="mic-hint" id="micHint">Tap the mic and ask something about the tables on the right.</p>
+
+
+        <p class="mic-hint" id="micHint">
+          Tap the mic and ask something about the tables on the right.
+        </p>
+
+
+        <!-- Sample questions -->
 
         <div class="samples">
-  <p class="samples-label">Try saying:</p>
-  <div class="sample-chips">
-    <button class="chip" data-q="What is the average salary in each department?">Average salary per department</button>
-    <button class="chip" data-q="Show me the top 5 earners in each department">Top 5 earners per department</button>
-    <button class="chip" data-q="How many employees are in Engineering?">Headcount in a department</button>
-    <button class="chip" data-q="Who is the highest paid person in Sales?">Highest paid in a department</button>
-  </div>
-</div>
 
-        <div class="fallback-row" id="fallbackRow" style="display:none;">
-          <input type="text" id="fallbackInput" placeholder="Type your question instead…">
-          <button class="btn yes" id="fallbackSend">Send</button>
+          <p class="samples-label">
+            Try saying:
+          </p>
+
+
+          <div class="sample-chips">
+
+            <button
+              class="chip"
+              data-q="What is the average salary in each department?"
+            >
+              Average salary per department
+            </button>
+
+
+            <button
+              class="chip"
+              data-q="Show me the top 5 earners in each department"
+            >
+              Top 5 earners per department
+            </button>
+
+
+            <button
+              class="chip"
+              data-q="How many employees are in Engineering?"
+            >
+              Headcount in a department
+            </button>
+
+
+            <button
+              class="chip"
+              data-q="Who is the highest paid person in Sales?"
+            >
+              Highest paid in a department
+            </button>
+
+          </div>
+
         </div>
 
-        <div class="block" id="blockTranscript">
-          <p class="block-label">heard</p>
-          <p class="transcript-text" id="transcriptText"></p>
+
+        <!-- Text fallback -->
+
+        <div
+          class="fallback-row"
+          id="fallbackRow"
+          style="display:none;"
+        >
+
+          <input
+            type="text"
+            id="fallbackInput"
+            placeholder="Type your question instead…"
+          >
+
+          <button
+            class="btn yes"
+            id="fallbackSend"
+          >
+            Send
+          </button>
+
         </div>
 
-        <div class="block" id="blockQuery">
+
+        <!-- Transcript -->
+
+        <div
+          class="block"
+          id="blockTranscript"
+        >
+
+          <p class="block-label">
+            heard
+          </p>
+
+          <p
+            class="transcript-text"
+            id="transcriptText"
+          ></p>
+
+        </div>
+
+
+        <!-- Generated query -->
+
+        <div
+          class="block"
+          id="blockQuery"
+        >
+
           <div class="query-header">
-  <p class="block-label">query generated from schema context</p>
-  <button class="copy-btn" id="copyBtn">Copy</button>
-</div>
-          <pre class="query" id="queryText"></pre>
-          <p class="explain" id="explainText"></p>
 
-          <div class="confirm-row" id="confirmRow">
-            <span class="confirm-q">Is this what you meant?</span>
-            <button class="btn yes" id="btnYes">Yes, run it</button>
-            <button class="btn no" id="btnNo">No, not quite</button>
+            <p class="block-label">
+              query generated from schema context
+            </p>
+
+            <button
+              class="copy-btn"
+              id="copyBtn"
+            >
+              Copy
+            </button>
+
           </div>
 
-          <div class="revise-row" id="reviseRow" style="display:none;">
-            <input type="text" id="reviseInput" placeholder="What did you actually mean?">
-            <button class="btn" id="btnRevise">Revise</button>
+
+          <pre
+            class="query"
+            id="queryText"
+          ></pre>
+
+
+          <p
+            class="explain"
+            id="explainText"
+          ></p>
+
+
+          <!-- Confirmation -->
+
+          <div
+            class="confirm-row"
+            id="confirmRow"
+          >
+
+            <span class="confirm-q">
+              Is this what you meant?
+            </span>
+
+
+            <button
+              class="btn yes"
+              id="btnYes"
+            >
+              Yes, run it
+            </button>
+
+
+            <button
+              class="btn no"
+              id="btnNo"
+            >
+              No, not quite
+            </button>
+
           </div>
+
+
+          <!-- Revision -->
+
+          <div
+            class="revise-row"
+            id="reviseRow"
+            style="display:none;"
+          >
+
+            <input
+              type="text"
+              id="reviseInput"
+              placeholder="What did you actually mean?"
+            >
+
+
+            <button
+              class="btn"
+              id="btnRevise"
+            >
+              Revise
+            </button>
+
+          </div>
+
         </div>
 
-        <div class="block" id="blockRevised">
-          <p class="block-label">revised query</p>
-          <pre class="query" id="revisedQueryText"></pre>
+
+        <!-- Revised query -->
+
+        <div
+          class="block"
+          id="blockRevised"
+        >
+
+          <p class="block-label">
+            revised query
+          </p>
+
+
+          <pre
+            class="query"
+            id="revisedQueryText"
+          ></pre>
+
+
           <div class="confirm-row">
-            <span class="confirm-q">That look right?</span>
-            <button class="btn yes" id="btnYes2">Yes, run it</button>
+
+            <span class="confirm-q">
+              That look right?
+            </span>
+
+
+            <button
+              class="btn yes"
+              id="btnYes2"
+            >
+              Yes, run it
+            </button>
+
           </div>
+
         </div>
 
-        <div class="block" id="blockError">
-          <p class="block-label err">error</p>
-          <p class="error-text" id="errorText"></p>
+
+        <!-- Error -->
+
+        <div
+          class="block"
+          id="blockError"
+        >
+
+          <p class="block-label err">
+            error
+          </p>
+
+
+          <p
+            class="error-text"
+            id="errorText"
+          ></p>
+
         </div>
+
       </div>
+
+
+      <!-- ================= TABLES ================= -->
 
       <div class="panel">
-        <p class="panel-title"><span class="n">02</span> Tables in scope</p>
+
+        <p class="panel-title">
+
+          <span class="n">02</span>
+
+          Tables in scope
+
+        </p>
+
+
         <div class="schema-row">
-          <div class="schema-card"><div class="tname">departments</div><div class="cols">id · name</div></div>
-          <div class="schema-card"><div class="tname">employees</div><div class="cols">id · name · department_id</div></div>
-          <div class="schema-card"><div class="tname">salaries</div><div class="cols">id · employee_id · amount · effective_date</div></div>
+
+
+          <div class="schema-card">
+
+            <div class="tname">
+              departments
+            </div>
+
+            <div class="cols">
+              id · name
+            </div>
+
+          </div>
+
+
+          <div class="schema-card">
+
+            <div class="tname">
+              employees
+            </div>
+
+            <div class="cols">
+              id · name · department_id
+            </div>
+
+          </div>
+
+
+          <div class="schema-card">
+
+            <div class="tname">
+              salaries
+            </div>
+
+            <div class="cols">
+              id · employee_id · amount · effective_date
+            </div>
+
+          </div>
+
+
         </div>
+
       </div>
+
     </div>
+
+
+    <!-- ================= RIGHT COLUMN ================= -->
 
     <div>
-      <div class="panel">
-        <p class="panel-title"><span class="n">03</span> Run</p>
-        <div class="steps" id="steps">
-          <div class="step" data-s="0"><span class="idx">1</span> Sending query to database</div>
-          <div class="step" data-s="1"><span class="idx">2</span> Executing</div>
-          <div class="step" data-s="2"><span class="idx">3</span> Formatting results</div>
-        </div>
-      </div>
+
+
+      <!-- Run -->
 
       <div class="panel">
-        <p class="panel-title"><span class="n">04</span> Results</p>
-        <div id="resultsArea">
-          <div class="empty-results" id="emptyResults">Results will appear here once a query runs.</div>
+
+        <p class="panel-title">
+
+          <span class="n">03</span>
+
+          Run
+
+        </p>
+
+
+        <div
+          class="steps"
+          id="steps"
+        >
+
+          <div
+            class="step"
+            data-s="0"
+          >
+
+            <span class="idx">
+              1
+            </span>
+
+            Sending query to database
+
+          </div>
+
+
+          <div
+            class="step"
+            data-s="1"
+          >
+
+            <span class="idx">
+              2
+            </span>
+
+            Executing
+
+          </div>
+
+
+          <div
+            class="step"
+            data-s="2"
+          >
+
+            <span class="idx">
+              3
+            </span>
+
+            Formatting results
+
+          </div>
+
         </div>
+
       </div>
+
+
+      <!-- Results -->
+
+      <div class="panel">
+
+        <p class="panel-title">
+
+          <span class="n">04</span>
+
+          Results
+
+        </p>
+
+
+        <div id="resultsArea">
+
+          <div
+            class="empty-results"
+            id="emptyResults"
+          >
+            Results will appear here once a query runs.
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================= TASK 2 ================= -->
+
+      <!-- ================= QUERY PERFORMANCE ================= -->
+
+<div
+  class="panel performance-panel"
+  id="performancePanel"
+>
+
+  <p class="panel-title">
+    <span class="n">05</span>
+    Query Performance
+  </p>
+
+
+  <!-- Performance summary -->
+  <div class="performance-summary">
+
+    <!-- Latest response time -->
+    <div class="performance-stat">
+
+      <span class="stat-label">
+        Latest response
+      </span>
+
+      <strong id="latestResponseTime">
+        —
+      </strong>
+
+    </div>
+
+
+    <!-- Queries this session -->
+    <div class="performance-stat">
+
+      <span class="stat-label">
+        Queries this session
+      </span>
+
+      <strong id="queryCount">
+        0
+      </strong>
+
+    </div>
+
+
+    <!-- Average response time -->
+    <div class="performance-stat">
+
+      <span class="stat-label">
+        Average response
+      </span>
+
+      <strong id="averageResponseTime">
+        —
+      </strong>
+
     </div>
 
   </div>
+
+
+  <!-- Response time chart -->
+  <div class="chart-wrapper">
+
+    <div class="chart-title">
+      Response time per query
+    </div>
+
+    <canvas
+      id="responseTimeChart"
+      width="600"
+      height="220"
+    ></canvas>
+
+    <div id="chartEmpty">
+      Run a query to see response-time data.
+    </div>
+
+  </div>
+
 </div>
 {% endblock %}
