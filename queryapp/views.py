@@ -28,7 +28,7 @@ def uses_allowed_tables(sql: str) -> bool:
 def get_readonly_connection():
     # mode=ro opens the SQLite file such that write attempts fail at the
     # database layer itself, regardless of what the query text says.
-    return sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    return sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True,timeout=20)
 
 # --- Gemini setup ---
 # Double-check this model name against Google's current docs before relying on it —
@@ -49,12 +49,16 @@ employees(id, name, department_id -> departments.id)
 salaries(id, employee_id -> employees.id, amount, effective_date)
 
 Rules:
-1. Output ONE SELECT statement OR ONE whitelisted write statement (UPDATE, INSERT, DELETE) on the allowed tables.
-2. Whitelisted writes: UPDATE, INSERT, or DELETE queries modifying in-scope tables.
-3. Strictly FORBIDDEN: DROP, ALTER, TRUNCATE, CREATE, GRANT, ATTACH, PRAGMA, REPLACE.
-4. No semicolons, no comments.
-5. CRITICAL: Reply ONLY with raw JSON. Do not include conversational text or markdown.
-Format exactly like this: {"sql": "...", "query_type": "read" | "write", "explanation": "..."}"""
+1. Output EXACTLY ONE standard SQLite statement (SELECT, INSERT, UPDATE, or DELETE).
+2. DO NOT use CTEs (`WITH` clauses) or `WITH ... AS (INSERT ...)` blocks. SQLite does NOT support data-modifying CTEs.
+3. If the prompt asks to create a NEW employee AND a salary simultaneously:
+   - Generate an INSERT statement for the `employees` table ONLY.
+   - Note in the `explanation` field that adding the salary requires a second query after employee creation.
+4. If adding a salary for an EXISTING employee, use a subquery for the employee_id:
+   `INSERT INTO salaries (employee_id, amount, effective_date) VALUES ((SELECT id FROM employees WHERE name = 'Sneha'), 500000, CURRENT_DATE)`
+5. Strictly FORBIDDEN: DROP, ALTER, TRUNCATE, CREATE, GRANT, ATTACH, PRAGMA, REPLACE.
+6. No semicolons, no comments, no markdown syntax.
+7. CRITICAL: Reply ONLY with raw JSON matching: {"sql": "...", "query_type": "read" | "write", "explanation": "..."}"""
 
 
 # --- Safety check applied to every piece of SQL before it is run ---
@@ -68,22 +72,28 @@ WRITE_FORBIDDEN = re.compile(
     re.IGNORECASE,
 )
 
+def clean_sql(sql: str) -> str:
+    """Removes markdown backticks and trailing semicolons."""
+    sql = sql.strip()
+    if sql.startswith("```"):
+        sql = re.sub(r"^```(?:sql)?\n?", "", sql, flags=re.IGNORECASE)
+        sql = re.sub(r"\n?```$", "", sql)
+    return sql.strip().rstrip(";").strip()
+
 def is_safe_select(sql: str) -> bool:
-    sql_stripped = sql.strip().rstrip(";").strip()
+    sql_stripped = clean_sql(sql)
     if not sql_stripped.lower().startswith("select"):
         return False
-    if ";" in sql_stripped:
-        return False
-    if "--" in sql_stripped or "/*" in sql_stripped or "*/" in sql_stripped:
+    if ";" in sql_stripped or "--" in sql_stripped or "/*" in sql_stripped or "*/" in sql_stripped:
         return False
     if FORBIDDEN.search(sql_stripped):
         return False
     return True
 
 def is_safe_write(sql: str) -> bool:
-    sql_stripped = sql.strip().rstrip(";").strip()
+    sql_stripped = clean_sql(sql)
     
-    # Allow UPDATE, INSERT, and DELETE statements
+    # Strictly require standard write statements
     if not sql_stripped.lower().startswith(("update", "insert", "delete")):
         return False
         
@@ -208,7 +218,7 @@ def run_query(request):
             row_count = len(rows)
         else:
             # Execute write on standard writable SQLite connection
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(DB_PATH,timeout=20)
             cursor = conn.cursor()
             cursor.execute(sql)
             conn.commit()
